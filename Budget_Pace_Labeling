@@ -1,0 +1,269 @@
+// Copyright 2020, The SEO PPC Pros. All Rights Reserved.
+// www.seoppcpros.com
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// How to 
+// Make a copy of this spreadsheet here. https://bit.ly/Example_Budget_Management_Pacing_Sheet
+// Update 1xDLQ7TRRn08CY3jDUQc5tPvfmjD-s-yV3m40RzdLjnk to match that of your new copy of the above sheet 
+// Update the spreadsheet to have your account IDs, campaign ID's, and budgets. The rest is automatic. 
+// 
+// This script runs in Parallel, at the MCC level. It can iterate through many acconts, I've used it with
+// to 24 accoout under and MCC that had more than 50 accounts. 
+//
+// Fee free to reach out for any questions or feedback
+// https://www.linkedin.com/in/searchenginerankings/
+// Thanks for trying my customized script
+
+
+var AccIds=[
+              'xxx-xxx-xxxx',
+             // 'xxx-xxx-xxxx',
+              'xxx-xxx-xxxx'
+];
+
+
+var labels = ['LBB','uB','xuB','nB','oB'];
+
+function main() {
+	
+	  var accountIterator = MccApp.accounts()
+						  .withIds([AccIds]);
+	
+	accountIterator.executeInParallel('processAccount', 'allFinished');
+				  
+}
+
+function processAccount(){
+	
+		var budgetSheet = SpreadsheetApp.openById('1xDLQ7TRRn08CY3jDUQc5tPvfmjD-s-yV3m40RzdLjnk').getSheetByName("Budget_Distribution"); 
+		var column =2; //column Index   
+		var columnValues = budgetSheet.getRange(2, column, budgetSheet.getLastRow()).getValues();
+
+	    var account = AdsApp.currentAccount();
+
+	    var accountId = account.getCustomerId(),
+		accountName = account.getName();
+		Logger.log('=========================================================================================================================');
+		Logger.log('=========================== Now iterating through ' + accountName +' & '+accountId+ ' campaigns ==========================='); 
+		Logger.log('=========================================================================================================================');
+		
+		if(labels.length > 0) {
+			removeLabelUsed(labels);
+			for(var lb in labels){
+				createLabel(labels[lb]);
+			}	
+		}
+		var searchResult = columnValues.findIndex(accountId); //Row Index - 2
+		if(searchResult != -1)
+		{
+			var values = budgetSheet.getDataRange().getValues();
+			
+			for(var b=0; b<searchResult.length;b++){
+				var rowC = searchResult[b]+2;
+          
+                var d = 'D'+rowC;
+				var e = 'E'+rowC;
+                var l = 'L'+rowC;		  
+		        var f = 'F'+rowC; 
+				 if(!budgetSheet.getRange(e).isBlank()){
+			          var campaignId = budgetSheet.getRange(e).getValue();
+					var CurrentCampaignName = budgetSheet.getRange(d).getValue();//////////////////////////////////////////////////////////////////////////////////
+					var monthlyBudget = budgetSheet.getRange(f).getValue();
+					var fields = "CampaignId,CampaignName,Cost,RecommendedBudgetAmount";
+					var reportIterator = AdWordsApp.report('SELECT ' + fields +' FROM CAMPAIGN_PERFORMANCE_REPORT WHERE CampaignId='+campaignId+' DURING THIS_MONTH').rows();
+						  
+					while(reportIterator.hasNext()) {
+					   var row = reportIterator.next();
+					   var cost = getFloat(row["Cost"]).toFixed(2);
+					   var recommendedBudget = 0;
+
+					  Logger.log('RecommendedBudgetAmount'+ row["RecommendedBudgetAmount"]);		   
+					
+					if(row["RecommendedBudgetAmount"])
+							 recommendedBudget = getFloat(row["RecommendedBudgetAmount"]).toFixed(2);
+					  
+						  budgetSheet.getRange(l).setValue(cost);
+					      applyLabelCampaign(CurrentCampaignName,campaignId,monthlyBudget,cost,recommendedBudget);  
+
+						}				   
+				 }
+			}	
+		}
+		
+	
+}
+
+function allFinished(){
+	Logger.log("Execution is completed in all accounts");
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////////// Added code to removce labels due to error
+function removeLabel() {
+
+   var campaignIterator = AdsApp.campaigns()
+       .withCondition('CampaignId='+campaignId)
+       .forDateRange("THIS_MONTH")
+       .get();
+  if (campaignIterator.hasNext()) {
+    var campaign = campaignIterator.next();
+    campaign.removeLabel('labels');
+		   Logger.log('XXX Campaign ID is ' + CampaignId + 'Campaign Name=' + CampaignName + 'Cost=' + Cost);  //////////////////////////////////////////////////////////////////////
+
+  }
+}
+//////////////////////////////////////////////////////////////////////////////////////// END code to removce labels error
+
+
+
+/***** Apply labels on campaign as per there monthly cost *************/
+
+function applyLabelCampaign(CurrentCampaignName,campaignId,monthlybudget,cost,recommendedBudget){
+
+		Logger.log('=============='); 
+
+var usedBudgetPercentage = (cost*100)/monthlybudget;
+
+var campaignIterator = AdWordsApp.campaigns()
+             .withCondition('CampaignId='+campaignId)
+             .forDateRange("THIS_MONTH")
+             .get();
+	  if (campaignIterator.hasNext()) {
+		  var campaign = campaignIterator.next();
+            var campName = campaign.getName();
+			var lbl = '';
+          if(recommendedBudget > 0){
+            Logger.log('LBB Label Applyed to the Campaign '+CurrentCampaignName )
+              campaign.applyLabel('LBB');
+			  lbl = 'LBB';
+          }else if(usedBudgetPercentage < 80){
+             Logger.log('uB Label Applyed to the Campaign '+CurrentCampaignName )
+              campaign.applyLabel('uB');
+			  lbl = 'uB';
+          }else if(usedBudgetPercentage < 60){
+             Logger.log('xB Label Applyed to the Campaign '+CurrentCampaignName )
+              campaign.applyLabel('xuB');
+			  lbl = 'xuB';
+          }else if(usedBudgetPercentage > 90 && usedBudgetPercentage < 110 ){
+             Logger.log('nB Label Applyed to the Campaign '+CurrentCampaignName )
+              campaign.applyLabel('nB');
+			  lbl = 'nB';
+          }else if(usedBudgetPercentage >= 120){
+             Logger.log('oB Label Applyed to the Campaign '+CurrentCampaignName )
+                    campaign.applyLabel('oB');
+			  lbl = 'oB';
+          }	
+		  
+		  applyLabelKeyword(campName,lbl);
+	  }
+}
+
+
+/* createLabel(name, description, backgroundColor)
+// ------------
+// Makes sure the label doesn't already exists before creating it
+// 
+*/
+function createLabel(name, description, backgroundColor) {
+ 
+ var labelIterator = AdWordsApp.labels()
+     .withCondition("Name CONTAINS '" + name + "'")
+     .get();
+    
+    if(labelIterator.hasNext()) {
+      Logger.log("The " + name + " label already exists in please_put_current_campaign_name_here");
+    } else {
+      Logger.log("The " + name + " label needs to be created: " + name + " desc: " + description + " color: " + backgroundColor);
+      if(description && backgroundColor) {
+        AdWordsApp.createLabel(name, description, backgroundColor);
+        Logger.log("The " + name + " label has been created");
+      } else if (description) {
+        AdWordsApp.createLabel(name, description);
+        Logger.log("The " + name + " label has been created");
+      } else {
+        AdWordsApp.createLabel(name);
+        Logger.log("The " + name + " label has been created");
+      }
+    }
+}
+
+/*************
+
+For removeing label 'LBB','uB','xuB','nB','oB' used in the campaigns
+
+*************/
+
+function removeLabelUsed(clabels){
+	  var labelIterator = AdWordsApp.labels()
+						  .withCondition("LabelName IN ['LBB','uB','xuB','nB','oB']")
+						  .get();
+
+	// Gather the labels you want to delete into an array
+	var labels_to_delete = [];
+	while (labelIterator.hasNext()) {
+	  var label = labelIterator.next();
+	  labels_to_delete.push(label);
+	}
+	// Actually delete the labels
+	for (var i = 0; i < labels_to_delete.length; i++) {
+	  var label = labels_to_delete[i];
+	  label.remove();
+	}
+}
+
+/************Apply Label On Campaign Keywords*************/
+
+function applyLabelKeyword(campName,lbl){
+if(lbl != '' ){
+  Logger.log(campName);
+  var iterator = AdWordsApp.keywords()
+     .withCondition('CampaignName CONTAINS "'+campName+'"')
+     .withCondition('LabelNames CONTAINS_NONE  ["'+lbl+'"]')
+     .withCondition("Status = ENABLED")
+     .forDateRange("THIS_MONTH")
+     .get();
+
+    while(iterator.hasNext()){
+      var item = iterator.next();
+	  item.applyLabel(lbl);
+	 Logger.log("Label : "+lbl+" applied on keyword: "+item.getText()+" in campaign: "+campName); 
+	 } 
+ }
+}
+
+/***** converting string to floating nunber *****/
+
+function getFloat (input) {
+    if(!input || input == "" || typeof(input) === 'undefined') var input = "0.0";
+    input = input.toString();
+    var output = parseFloat(input.replace(/,/g, ""));
+    return output;
+}
+
+
+
+/****************Search All indexs in the array *************/
+
+Array.prototype.findIndex = function(search){
+  if(search == "") return false;
+  var toAddArray = [];
+  for (var i=0; i<this.length; i++){
+    if (this[i].toString().indexOf(search) > -1 ){
+      toAddArray.push(i);
+    } 
+  }
+  if(toAddArray.length == 0)
+   return -1;
+  else
+    return toAddArray;
+}
